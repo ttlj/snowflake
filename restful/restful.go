@@ -53,8 +53,3 @@ func (e *Env) idsHandler(c *gin.Context) {
 func statusHandler(c *gin.Context) {
 	c.String(http.StatusOK, "OK")
 }
-
-// https://newfivefour.com/golang-closures-anonymous-functions.html
-func newSimpleEngine(f func(string) string) {
-	// TODO
-}

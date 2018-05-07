@@ -26,7 +26,7 @@ type Settings struct {
 // MaskConfig configures the structure of the generated ID.
 // The sum of all bits must not exceed 63 bits.
 type MaskConfig struct {
-	TimeBits, MachineIDBits, SequenceBits uint8
+	TimeBits, WorkerBits, SequenceBits uint8
 }
 
 type bitmask struct {
@@ -85,9 +85,9 @@ func NewNode(st Settings, mc ...MaskConfig) (*Node, error) {
 	sf.machineID = uint32(val)
 	sf.mask = mask
 	sf.bmask.time = uint64(1)<<mask.TimeBits - 1
-	sf.bmask.machine = uint32(1)<<mask.MachineIDBits - 1
+	sf.bmask.machine = uint32(1)<<mask.WorkerBits - 1
 	sf.bmask.seq = uint16(1)<<mask.SequenceBits - 1
-	sf.shiftTime = mask.MachineIDBits + mask.SequenceBits
+	sf.shiftTime = mask.WorkerBits + mask.SequenceBits
 	sf.seq = sf.bmask.seq // why is it set to max value ?
 
 	return sf, nil
@@ -125,8 +125,8 @@ func (sf *Node) NextIDs() ([]uint64, error) {
 const scaleFactor = 1e6
 
 func validMask(mc MaskConfig) bool {
-	s := mc.MachineIDBits + mc.SequenceBits + mc.TimeBits
-	if mc.MachineIDBits > 32 || mc.SequenceBits > 16 || s > 63 {
+	s := mc.WorkerBits + mc.SequenceBits + mc.TimeBits
+	if mc.WorkerBits > 32 || mc.SequenceBits > 16 || s > 63 {
 		return false
 	}
 	return true
@@ -138,7 +138,7 @@ func (sf *Node) toID() (uint64, error) {
 	}
 	// Time-MachineID-Sequence
 	// return uint64(sf.prevTime)<<(sf.shiftTime) |
-	// 	uint64(sf.seq)<<sf.mask.MachineIDBits |
+	// 	uint64(sf.seq)<<sf.mask.WorkerBits |
 	// 	uint64(sf.machineID), nil
 
 	// Time-MachineID-Sequence

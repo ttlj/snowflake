@@ -29,7 +29,8 @@ func main() {
 	default:
 		st.WorkerID = randomWorkerID
 	}
-	node, err := snowflake.NewNode(st)
+	mc := snowflake.MaskConfig{TimeBits: 41, WorkerBits: 10, SequenceBits: 12}
+	node, err := snowflake.NewNode(st, mc)
 	if node == nil {
 		log.Fatal("failed to initialize snowflake: ", err)
 	}

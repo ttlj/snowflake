@@ -49,7 +49,7 @@ func TestInvalidMaskConfig(t *testing.T) {
 	}
 	var st snowflake.Settings
 	for _, tt := range parameters {
-		mc := snowflake.MaskConfig{TimeBits: tt.t, MachineIDBits: tt.m, SequenceBits: tt.s}
+		mc := snowflake.MaskConfig{TimeBits: tt.t, WorkerBits: tt.m, SequenceBits: tt.s}
 		fmt.Println(mc)
 		_, err := snowflake.NewNode(st, mc)
 		if err == nil {
