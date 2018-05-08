@@ -1,7 +1,7 @@
 KFlake
 ======
 
-Example usage of SnowFlake unique ID generator. By default it assumes running in a Kubernetes environment (expects environment variable MY_POD_ID with StatefulSet pod-name).
+Example usage of the SnowFlake unique ID generator. By default it assumes running in a Kubernetes environment (expects environment variable MY_POD_NAME with StatefulSet pod-name).
 
 ```
 Usage:
