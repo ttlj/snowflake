@@ -24,7 +24,7 @@ func main() {
 	// TODO: choice-flag
 	var wid string
 	flag.StringVar(&wid, "t", "", "worker-id type: {podid|podip|random}; default: podid")
-	flag.Var(&maskints, "m", "comma separated MaskConfig values {time,worker,sequence} bits")
+	flag.Var(&maskints, "m", "comma separated MaskConfig values {time,worker,sequence} bits; default: 41,10,12")
 	flag.Parse()
 
 	// Init snowflake
