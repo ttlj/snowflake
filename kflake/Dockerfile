@@ -1,9 +1,8 @@
 FROM scratch
 LABEL maintainer="tlj@digiverse.si"
 
-ADD main /
+COPY main /
 
 EXPOSE 3080
 
-ENTRYPOINT ./main
-
+ENTRYPOINT [ "./main" ]
