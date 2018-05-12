@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/deckarep/golang-set"
-	"github.com/stretchr/testify/assert"
 	"github.com/ttlj/snowflake"
 )
 
@@ -15,19 +14,18 @@ func oneWorker() (uint16, error) {
 	return 1, nil
 }
 
-func getFlake() *snowflake.Node {
+func getFlake(mc ...snowflake.MaskConfig) *snowflake.Node {
+	mask := snowflake.MaskConfig{TimeBits: 39, WorkerBits: 16, SequenceBits: 8} // default
+	if len(mc) > 0 {
+		mask = mc[0]
+	}
 	var settings snowflake.Settings
-	settings.StartTime = time.Now() // startTime is the current time
-	//settings.StartTime = time.Date(2014, 1, 1, 0, 0, 0, 0, time.UTC)
+	settings.StartTime = time.Date(2014, 1, 1, 0, 0, 0, 0, time.UTC)
 	settings.WorkerID = oneWorker
-	//var sf *SnowFlake
-	sf, _ := snowflake.NewNode(settings)
+	sf, _ := snowflake.NewNode(settings, mask)
 	if sf == nil {
 		panic("SnowFlake not created")
 	}
-	// startTime = toSnowFlakeTime(settings.StartTime)
-	// //ip, _ := lower16BitPrivateIP()
-	// machineID = uint64(321)
 	return sf
 }
 
@@ -40,16 +38,13 @@ func nextID(t *testing.T, sf *snowflake.Node) uint64 {
 }
 
 func TestInvalidMaskConfig(t *testing.T) {
-	var parameters = []struct {
-		t, m, s uint8
-	}{
-		{38, 8, 17},  // too big seq
-		{21, 33, 8},  // too big worker id
-		{39, 16, 16}, // too big overall
+	var parameters = []snowflake.MaskConfig{
+		{TimeBits: 38, WorkerBits: 8, SequenceBits: 17},  // too big seq
+		{TimeBits: 21, WorkerBits: 33, SequenceBits: 8},  // too big worker id
+		{TimeBits: 39, WorkerBits: 16, SequenceBits: 16}, // too big overall
 	}
 	var st snowflake.Settings
-	for _, tt := range parameters {
-		mc := snowflake.MaskConfig{TimeBits: tt.t, WorkerBits: tt.m, SequenceBits: tt.s}
+	for _, mc := range parameters {
 		fmt.Println(mc)
 		_, err := snowflake.NewNode(st, mc)
 		if err == nil {
@@ -69,7 +64,7 @@ func TestFlakeTwice(t *testing.T) {
 	sf := getFlake()
 	id1, _ := sf.NextID()
 	id2, _ := sf.NextID()
-	assert.Equal(t, true, (id1 < id2), "ID Order Mismatch")
+	assert(t, (id1 < id2), "ID Order Mismatch")
 }
 
 func TestSnowFlakeFor2Sec(t *testing.T) {
@@ -97,14 +92,12 @@ func TestSnowFlakeFor2Sec(t *testing.T) {
 func TestFlakeList(t *testing.T) {
 	sf := getFlake()
 	idList, err := sf.NextIDs()
-	if err != nil {
-		t.Fatal("id list not generated")
-	}
+	ok(t, err)
 	lower := idList[0]
 	upper := idList[255]
-	assert.Equal(t, 256, len(idList), "Length of ID List should be 256")
-	assert.Equal(t, 256, cap(idList), "Capacity of ID List should be 256")
-	assert.Equal(t, true, (lower < upper), "ID Order Mismatch")
+	equals(t, 256, len(idList))
+	equals(t, 256, cap(idList))
+	assert(t, (lower < upper), "ID Order Mismatch")
 }
 
 func TestFlakeInParallel(t *testing.T) {
