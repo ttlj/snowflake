@@ -1,13 +1,19 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"flag"
 	"fmt"
 	"log"
 	"math/big"
+	"net/http"
+	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/ttlj/snowflake"
 	"github.com/ttlj/snowflake/restful"
@@ -27,7 +33,40 @@ func main() {
 	flag.Var(&maskints, "m", "comma separated MaskConfig values {time,worker,sequence} bits; default: 41,10,12")
 	flag.Parse()
 
-	// Init snowflake
+	node := initFlake(wid)
+
+	// Start engine
+	e := &restful.Env{Flake: node}
+	r := restful.NewEngine(e)
+
+	srv := &http.Server{
+		Addr:    port,
+		Handler: r,
+	}
+
+	go func() {
+		// service connections
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen: %s\n", err)
+		}
+	}()
+
+	// Wait for interrupt signal to gracefully shutdown the server with
+	// a timeout of 5 seconds.
+	quit := make(chan os.Signal)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	<-quit
+	log.Println("Shutdown Server ...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatal("Server Shutdown:", err)
+	}
+	log.Println("Server exiting")
+}
+
+func initFlake(wid string) *snowflake.Node {
 	st := snowflake.Settings{}
 	switch wid {
 	case "podid":
@@ -49,13 +88,7 @@ func main() {
 	if node == nil {
 		log.Fatal("failed to initialize snowflake: ", err)
 	}
-
-	// Start engine
-	e := &restful.Env{Flake: node}
-	r := restful.NewEngine(e)
-	if err := r.Run(port); err != nil {
-		log.Fatal("failed to run server: ", err)
-	}
+	return node
 }
 
 func randomWorkerID() (uint16, error) {
