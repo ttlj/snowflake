@@ -37,6 +37,22 @@ func nextID(t *testing.T, sf *snowflake.Node) uint64 {
 	return id
 }
 
+func nextIDs(t *testing.T, sf *snowflake.Node) []uint64 {
+	lst, err := sf.NextIDs()
+	if err != nil {
+		t.Fatalf("id not generated: %s", err)
+	}
+	return lst
+}
+
+func nextIDBatch(t *testing.T, sf *snowflake.Node) []uint64 {
+	lst, err := sf.NextIDBatch(1000)
+	if err != nil {
+		t.Fatalf("id not generated: %s", err)
+	}
+	return lst
+}
+
 func TestInvalidMaskConfig(t *testing.T) {
 	var parameters = []snowflake.MaskConfig{
 		{TimeBits: 38, WorkerBits: 8, SequenceBits: 17},  // too big seq
@@ -112,6 +128,76 @@ func TestFlakeInParallel(t *testing.T) {
 	generate := func() {
 		for i := 0; i < numID; i++ {
 			consumer <- nextID(t, sf)
+		}
+	}
+
+	const numGenerator = 10
+	for i := 0; i < numGenerator; i++ {
+		go generate()
+	}
+
+	set := mapset.NewSet()
+	for i := 0; i < numID*numGenerator; i++ {
+		id := <-consumer
+		if set.Contains(id) {
+			t.Fatal("duplicated id")
+		} else {
+			set.Add(id)
+		}
+	}
+	fmt.Println("number of id:", set.Cardinality())
+}
+
+func TestFlakeListInParallel(t *testing.T) {
+	sf := getFlake()
+	numCPU := runtime.NumCPU()
+	runtime.GOMAXPROCS(numCPU)
+	fmt.Println("number of cpu:", numCPU)
+
+	consumer := make(chan uint64)
+
+	const numID = 1000
+	generate := func() {
+		for i := 0; i < numID; i++ {
+			lst := nextIDs(t, sf)
+			for _, k := range lst {
+				consumer <- k
+			}
+		}
+	}
+
+	const numGenerator = 10
+	for i := 0; i < numGenerator; i++ {
+		go generate()
+	}
+
+	set := mapset.NewSet()
+	for i := 0; i < numID*numGenerator; i++ {
+		id := <-consumer
+		if set.Contains(id) {
+			t.Fatal("duplicated id")
+		} else {
+			set.Add(id)
+		}
+	}
+	fmt.Println("number of id:", set.Cardinality())
+}
+
+func TestFlakeBatchInParallel(t *testing.T) {
+	sf := getFlake()
+	numCPU := runtime.NumCPU()
+	runtime.GOMAXPROCS(numCPU)
+	fmt.Println("number of cpu:", numCPU)
+
+	consumer := make(chan uint64)
+
+	const numID = 1000
+	generate := func() {
+		for i := 0; i < numID; i++ {
+			lst := nextIDBatch(t, sf)
+			for _, k := range lst {
+				consumer <- k
+			}
 		}
 	}
 

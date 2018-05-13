@@ -102,14 +102,82 @@ func (sf *Node) NextID() (uint64, error) {
 	sf.mutex.Lock()
 	defer sf.mutex.Unlock()
 	sf.validateTime()
-	if (sf.tslast - sf.epoch) >= 1<<sf.mask.TimeBits {
-		return 0, errors.New("over the time limit")
+	return sf.toID()
+}
+
+type interval struct {
+	lower, upper uint64
+}
+
+func (sf *Node) intervals(size uint16) ([]interval, error) {
+	sf.mutex.Lock()
+	defer sf.mutex.Unlock()
+	top := sf.bmask.seq
+	bulk := size
+	if size == 0 {
+		bulk = top
 	}
-	// Time-MachineID-Sequence
-	id := uint64(sf.tslast-sf.epoch)<<(sf.shiftTime) |
-		uint64(sf.machineID)<<sf.mask.SequenceBits |
-		uint64(sf.seq)
-	return id, nil
+	var count uint16
+	lst := make([]interval, 0, 4)
+	for count < bulk {
+		var err error
+		var ii interval
+		sf.validateTime()
+
+		rest := bulk - count
+		ii.lower, err = sf.toID()
+		if err != nil {
+			return nil, err
+		}
+
+		avail := top - sf.seq
+		if avail >= rest {
+			sf.seq += rest - 1
+		} else {
+			sf.seq = top
+		}
+		ii.upper, err = sf.toID()
+		if err != nil {
+			return nil, err
+		}
+
+		count += uint16(ii.upper - ii.lower + 1)
+		lst = append(lst, ii)
+		if size == 0 {
+			break
+		}
+	}
+	return lst, nil
+}
+
+// NextIDRange returns
+func (sf *Node) NextIDRange() (uint64, uint64, error) {
+	sf.mutex.Lock()
+	defer sf.mutex.Unlock()
+	sf.validateTime()
+	lower, err := sf.toID()
+	if err != nil {
+		return 0, 0, err
+	}
+	sf.seq = sf.bmask.seq
+	upper, err := sf.toID()
+	if err != nil {
+		return 0, 0, err
+	}
+	return lower, upper, nil
+}
+
+// NextIDBatch return list of identifiers of requested size
+func (sf *Node) NextIDBatch(size int) ([]uint64, error) {
+	lst := make([]uint64, 0, sf.bmask.seq+1)
+	for i := 0; i < size; i++ {
+		id, err := sf.NextID()
+		if err != nil {
+			return nil, err
+		}
+		lst = append(lst, id)
+	}
+	return lst, nil
 }
 
 // NextIDs returns block of IDs, with len 2^sequence-bits
@@ -130,6 +198,7 @@ func (sf *Node) NextIDs() ([]uint64, error) {
 		lst = append(lst, base+uint64(sf.seq))
 		sf.seq = sf.seq + 1
 	}
+	sf.seq = sf.seq - 1
 	return lst, nil
 }
 
@@ -139,6 +208,16 @@ const scaleFactor = 1e6
 
 func milliseconds() int64 {
 	return time.Now().UnixNano() / scaleFactor
+}
+
+func (sf *Node) toID() (uint64, error) {
+	if (sf.tslast - sf.epoch) >= 1<<sf.mask.TimeBits {
+		return 0, errors.New("over the time limit")
+	}
+	// Time-MachineID-Sequence
+	return uint64(sf.tslast-sf.epoch)<<(sf.shiftTime) |
+		uint64(sf.machineID)<<sf.mask.SequenceBits |
+		uint64(sf.seq), nil
 }
 
 func validMask(mc MaskConfig) bool {
@@ -151,7 +230,11 @@ func validMask(mc MaskConfig) bool {
 
 func (sf *Node) validateTime() {
 	ts := milliseconds()
-	if sf.tslast == ts {
+	if ts < sf.tslast {
+		log.Fatalf("time is moving backwards, waiting until %d\n", sf.tslast)
+	}
+
+	if ts == sf.tslast {
 		sf.seq = (sf.seq + 1) & sf.bmask.seq
 		if sf.seq == 0 {
 			for ts <= sf.tslast {
@@ -160,10 +243,6 @@ func (sf *Node) validateTime() {
 		}
 	} else {
 		sf.seq = 0
-	}
-
-	if ts < sf.tslast {
-		log.Fatalf("time is moving backwards, waiting until %d\n", sf.tslast)
 	}
 
 	sf.tslast = ts

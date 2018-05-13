@@ -33,6 +33,18 @@ func BenchmarkNextID(b *testing.B) {
 	}
 }
 
+func BenchmarkNextIDBatch(b *testing.B) {
+	for _, tc := range testMasks {
+		sf, name := setBench(tc)
+		b.ResetTimer()
+		b.Run(name, func(b *testing.B) {
+			for n := 0; n < b.N; n++ {
+				sf.NextIDBatch(1000)
+			}
+		})
+	}
+}
+
 func BenchmarkNextIDs(b *testing.B) {
 	for _, tc := range testMasks {
 		sf, name := setBench(tc)
