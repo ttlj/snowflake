@@ -8,7 +8,7 @@ import (
 )
 
 var testMasks = []snowflake.MaskConfig{
-	{TimeBits: 45, WorkerBits: 10, SequenceBits: 8},
+	// {TimeBits: 45, WorkerBits: 10, SequenceBits: 8},
 	{TimeBits: 44, WorkerBits: 10, SequenceBits: 9},
 	{TimeBits: 43, WorkerBits: 10, SequenceBits: 10},
 	{TimeBits: 42, WorkerBits: 10, SequenceBits: 11},
@@ -33,7 +33,7 @@ func BenchmarkNextID(b *testing.B) {
 	}
 }
 
-func BenchmarkNextIDBatch(b *testing.B) {
+func skipBenchmarkNextIDBatch(b *testing.B) {
 	for _, tc := range testMasks {
 		sf, name := setBench(tc)
 		b.ResetTimer()
@@ -45,13 +45,25 @@ func BenchmarkNextIDBatch(b *testing.B) {
 	}
 }
 
-func BenchmarkNextIDs(b *testing.B) {
+func BenchmarkNextIDRange(b *testing.B) {
 	for _, tc := range testMasks {
 		sf, name := setBench(tc)
 		b.ResetTimer()
 		b.Run(name, func(b *testing.B) {
 			for n := 0; n < b.N; n++ {
-				sf.NextIDs()
+				sf.NextIDRange()
+			}
+		})
+	}
+}
+
+func skipBenchmarkNextIDRangeFill(b *testing.B) {
+	for _, tc := range testMasks {
+		sf, name := setBench(tc)
+		b.ResetTimer()
+		b.Run(name, func(b *testing.B) {
+			for n := 0; n < b.N; n++ {
+				sf.NextIDRangeFill()
 			}
 		})
 	}

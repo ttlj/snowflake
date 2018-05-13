@@ -41,7 +41,7 @@ func (e *Env) idHandler(c *gin.Context) {
 }
 
 func (e *Env) idsHandler(c *gin.Context) {
-	lst, err := e.Flake.NextIDs()
+	lst, err := e.Flake.NextIDRangeFill()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"result": "Failed to generate unique integer id list"})
 		return

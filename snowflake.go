@@ -167,6 +167,19 @@ func (sf *Node) NextIDRange() (uint64, uint64, error) {
 	return lower, upper, nil
 }
 
+// NextIDRangeFill returns range as list of identifiers
+func (sf *Node) NextIDRangeFill() ([]uint64, error) {
+	lower, upper, err := sf.NextIDRange()
+	if err != nil {
+		return nil, err
+	}
+	lst := make([]uint64, 0, sf.bmask.seq+1)
+	for i := lower; i <= upper; i++ {
+		lst = append(lst, i)
+	}
+	return lst, nil
+}
+
 // NextIDBatch return list of identifiers of requested size
 func (sf *Node) NextIDBatch(size int) ([]uint64, error) {
 	lst := make([]uint64, 0, sf.bmask.seq+1)
@@ -177,28 +190,6 @@ func (sf *Node) NextIDBatch(size int) ([]uint64, error) {
 		}
 		lst = append(lst, id)
 	}
-	return lst, nil
-}
-
-// NextIDs returns block of IDs, with len 2^sequence-bits
-func (sf *Node) NextIDs() ([]uint64, error) {
-	sf.mutex.Lock()
-	defer sf.mutex.Unlock()
-	sf.validateTime()
-	if (sf.tslast - sf.epoch) >= 1<<sf.mask.TimeBits {
-		return nil, errors.New("over the time limit")
-	}
-
-	sf.seq = 0
-	lst := make([]uint64, 0, sf.bmask.seq+1)
-	base := uint64(sf.tslast-sf.epoch)<<(sf.shiftTime) |
-		uint64(sf.machineID)<<sf.mask.SequenceBits |
-		uint64(sf.seq)
-	for sf.seq <= sf.bmask.seq {
-		lst = append(lst, base+uint64(sf.seq))
-		sf.seq = sf.seq + 1
-	}
-	sf.seq = sf.seq - 1
 	return lst, nil
 }
 

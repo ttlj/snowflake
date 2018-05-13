@@ -38,7 +38,7 @@ func nextID(t *testing.T, sf *snowflake.Node) uint64 {
 }
 
 func nextIDs(t *testing.T, sf *snowflake.Node) []uint64 {
-	lst, err := sf.NextIDs()
+	lst, err := sf.NextIDRangeFill()
 	if err != nil {
 		t.Fatalf("id not generated: %s", err)
 	}
@@ -107,7 +107,7 @@ func TestSnowFlakeFor2Sec(t *testing.T) {
 
 func TestFlakeList(t *testing.T) {
 	sf := getFlake()
-	idList, err := sf.NextIDs()
+	idList, err := sf.NextIDRangeFill()
 	ok(t, err)
 	lower := idList[0]
 	upper := idList[255]
