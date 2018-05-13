@@ -8,6 +8,7 @@ import (
 	"time"
 )
 
+// custom epoch
 var epoch = time.Date(2017, 11, 29, 0, 0, 0, 0, time.UTC).UnixNano()
 
 // Settings configures Node
@@ -54,7 +55,6 @@ type Node struct {
 // NewNode creates new SnowFlake worker
 func NewNode(st Settings, mc ...MaskConfig) (*Node, error) {
 	mask := MaskConfig{39, 16, 8} // default
-	// mask := MaskConfig{35, 16, 12} // default
 	if len(mc) > 0 {
 		mask = mc[0]
 		if !validMask(mask) {
@@ -69,9 +69,9 @@ func NewNode(st Settings, mc ...MaskConfig) (*Node, error) {
 		return nil, fmt.Errorf("invalid start-time")
 	}
 	if st.StartTime.IsZero() {
-		sf.epoch = epoch // workerTime(time.Date(2017, 11, 29, 0, 0, 0, 0, time.UTC))
+		sf.epoch = epoch
 	} else {
-		sf.epoch = workerTime(st.StartTime)
+		sf.epoch = st.StartTime.UTC().UnixNano() / scaleFactor
 	}
 
 	var err error
@@ -102,7 +102,11 @@ func (sf *Node) NextID() (uint64, error) {
 	sf.mutex.Lock()
 	defer sf.mutex.Unlock()
 	sf.validateTime()
-	return sf.toID()
+	id := sf.toID()
+	if (sf.tslast - sf.epoch) >= 1<<sf.mask.TimeBits {
+		return 0, errors.New("over the time limit")
+	}
+	return id, nil
 }
 
 // NextIDs returns block of IDs, with len 2^sequence-bits
@@ -113,13 +117,14 @@ func (sf *Node) NextIDs() ([]uint64, error) {
 	sf.seq = 0
 	idList := make([]uint64, 0, sf.bmask.seq+1)
 	for sf.seq <= sf.bmask.seq {
-		id, err := sf.toID()
-		if err != nil {
-			return nil, err
-		}
-		idList = append(idList, id)
+		idList = append(idList, sf.toID())
 		sf.seq = (sf.seq + 1)
 	}
+
+	if (sf.tslast - sf.epoch) >= 1<<sf.mask.TimeBits {
+		return nil, errors.New("over the time limit")
+	}
+
 	return idList, nil
 }
 
@@ -128,7 +133,7 @@ func (sf *Node) NextIDs() ([]uint64, error) {
 const scaleFactor = 1e6
 
 func milliseconds() int64 {
-	return time.Now().UnixNano() / 1e6
+	return time.Now().UnixNano() / scaleFactor
 }
 
 func validMask(mc MaskConfig) bool {
@@ -139,90 +144,34 @@ func validMask(mc MaskConfig) bool {
 	return true
 }
 
-func (sf *Node) toID() (uint64, error) {
-	ts := sf.tslast - sf.epoch
-	if ts >= 1<<sf.mask.TimeBits {
-		return 0, errors.New("over the time limit")
-	}
+func (sf *Node) toID() uint64 {
 	// Time-MachineID-Sequence
 	// return uint64(sf.tslast)<<(sf.shiftTime) |
 	// 	uint64(sf.seq)<<sf.mask.WorkerBits |
 	// 	uint64(sf.machineID), nil
 
 	// Time-MachineID-Sequence
-	return uint64(ts)<<(sf.shiftTime) |
+	return uint64(sf.tslast-sf.epoch)<<(sf.shiftTime) |
 		uint64(sf.machineID)<<sf.mask.SequenceBits |
-		uint64(sf.seq), nil
+		uint64(sf.seq)
 }
 
 func (sf *Node) validateTime() {
 	ts := milliseconds()
-	if sf.tslast < ts {
-		// this is only executed the first time
-		// this will be executed if the elapsedTime is not set correctly to ts time
-		sf.tslast = ts
-		sf.seq = 0
-	} else if sf.tslast == ts {
+	if sf.tslast == ts {
 		sf.seq = (sf.seq + 1) & sf.bmask.seq
 		if sf.seq == 0 {
-			sf.tslast++
-			overtime := sf.tslast - ts
-			time.Sleep(sleepTime((overtime)))
+			for ts <= sf.tslast {
+				ts = milliseconds()
+			}
 		}
-	} else {
-		log.Fatal("recent time can never be greater than ts time")
-	}
-}
-
-func (sf *Node) toID2() (uint64, error) {
-	if sf.tslast >= 1<<sf.mask.TimeBits {
-		return 0, errors.New("over the time limit")
-	}
-	// Time-MachineID-Sequence
-	// return uint64(sf.tslast)<<(sf.shiftTime) |
-	// 	uint64(sf.seq)<<sf.mask.WorkerBits |
-	// 	uint64(sf.machineID), nil
-
-	// Time-MachineID-Sequence
-	return uint64(sf.tslast)<<(sf.shiftTime) |
-		uint64(sf.machineID)<<sf.mask.SequenceBits |
-		uint64(sf.seq), nil
-}
-
-func (sf *Node) validateTime2() {
-	// fmt.Println("vt")
-	ts := currentElapsedTime(sf.epoch)
-	if sf.tslast < ts {
-		// this is only executed the first time
-		// this will be executed if the elapsedTime is not set correctly to ts time
-		sf.tslast = ts
+	} else if sf.tslast < ts {
 		sf.seq = 0
-	} else if sf.tslast == ts {
-		sf.seq = (sf.seq + 1) & sf.bmask.seq
-		if sf.seq == 0 {
-			sf.tslast++
-			overtime := sf.tslast - ts
-			// fmt.Println("sleeping", overtime)
-			time.Sleep(sleepTime((overtime)))
-		}
-	} else {
-		log.Fatal("recent time can never be greater than ts time")
 	}
-}
 
-func workerTime(t time.Time) int64 {
-	return t.UnixNano() / scaleFactor
-}
+	if ts < sf.tslast {
+		log.Fatalf("time is moving backwards, waiting until %d\n", sf.tslast)
+	}
 
-func currentElapsedTime(epoch int64) int64 {
-	return workerTime(time.Now()) - epoch
+	sf.tslast = ts
 }
-
-func sleepTime(overtime int64) time.Duration {
-	return time.Duration(overtime)*time.Millisecond -
-		time.Duration(time.Now().UnixNano()%scaleFactor)*time.Nanosecond
-}
-
-// func init() {
-// 	defer profile.Start().Stop()
-// }
