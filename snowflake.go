@@ -102,10 +102,13 @@ func (sf *Node) NextID() (uint64, error) {
 	sf.mutex.Lock()
 	defer sf.mutex.Unlock()
 	sf.validateTime()
-	id := sf.toID()
 	if (sf.tslast - sf.epoch) >= 1<<sf.mask.TimeBits {
 		return 0, errors.New("over the time limit")
 	}
+	// Time-MachineID-Sequence
+	id := uint64(sf.tslast-sf.epoch)<<(sf.shiftTime) |
+		uint64(sf.machineID)<<sf.mask.SequenceBits |
+		uint64(sf.seq)
 	return id, nil
 }
 
@@ -114,18 +117,20 @@ func (sf *Node) NextIDs() ([]uint64, error) {
 	sf.mutex.Lock()
 	defer sf.mutex.Unlock()
 	sf.validateTime()
-	sf.seq = 0
-	idList := make([]uint64, 0, sf.bmask.seq+1)
-	for sf.seq <= sf.bmask.seq {
-		idList = append(idList, sf.toID())
-		sf.seq = (sf.seq + 1)
-	}
-
 	if (sf.tslast - sf.epoch) >= 1<<sf.mask.TimeBits {
 		return nil, errors.New("over the time limit")
 	}
 
-	return idList, nil
+	sf.seq = 0
+	lst := make([]uint64, 0, sf.bmask.seq+1)
+	base := uint64(sf.tslast-sf.epoch)<<(sf.shiftTime) |
+		uint64(sf.machineID)<<sf.mask.SequenceBits |
+		uint64(sf.seq)
+	for sf.seq <= sf.bmask.seq {
+		lst = append(lst, base+uint64(sf.seq))
+		sf.seq = sf.seq + 1
+	}
+	return lst, nil
 }
 
 // ---- private -----
@@ -144,18 +149,6 @@ func validMask(mc MaskConfig) bool {
 	return true
 }
 
-func (sf *Node) toID() uint64 {
-	// Time-MachineID-Sequence
-	// return uint64(sf.tslast)<<(sf.shiftTime) |
-	// 	uint64(sf.seq)<<sf.mask.WorkerBits |
-	// 	uint64(sf.machineID), nil
-
-	// Time-MachineID-Sequence
-	return uint64(sf.tslast-sf.epoch)<<(sf.shiftTime) |
-		uint64(sf.machineID)<<sf.mask.SequenceBits |
-		uint64(sf.seq)
-}
-
 func (sf *Node) validateTime() {
 	ts := milliseconds()
 	if sf.tslast == ts {
@@ -165,7 +158,7 @@ func (sf *Node) validateTime() {
 				ts = milliseconds()
 			}
 		}
-	} else if sf.tslast < ts {
+	} else {
 		sf.seq = 0
 	}
 
