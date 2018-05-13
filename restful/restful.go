@@ -21,6 +21,7 @@ func NewEngine(e *Env) *gin.Engine {
 	r.GET("/status", statusHandler)
 	r.GET("/id", e.idHandler)
 	r.GET("/ids", e.idsHandler)
+	r.GET("/range", e.rangeHandler)
 	return r
 }
 
@@ -47,6 +48,18 @@ func (e *Env) idsHandler(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"ids": fmt.Sprint(lst),
+	})
+}
+
+func (e *Env) rangeHandler(c *gin.Context) {
+	lower, upper, err := e.Flake.NextIDRange()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"result": "Failed to generate unique integer id list"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"lower": fmt.Sprint(lower),
+		"upper": fmt.Sprint(upper),
 	})
 }
 
