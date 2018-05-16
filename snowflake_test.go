@@ -2,6 +2,7 @@ package snowflake_test
 
 import (
 	"fmt"
+	"math"
 	"runtime"
 	"testing"
 	"time"
@@ -34,6 +35,7 @@ func nextID(t *testing.T, sf *snowflake.Node) uint64 {
 	if err != nil {
 		t.Fatalf("id not generated: %s", err)
 	}
+	assert(t, (math.Logb(float64(id)) < 63), "too many bits")
 	return id
 }
 

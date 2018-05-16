@@ -8,8 +8,8 @@ import (
 	"time"
 )
 
-// custom epoch
-var epoch = time.Date(2017, 11, 29, 0, 0, 0, 0, time.UTC).UnixNano()
+// default custom epoch
+var epoch = time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC).UnixNano() / scaleFactor
 
 // Settings configures Node
 //
@@ -27,7 +27,7 @@ type Settings struct {
 }
 
 // MaskConfig configures the structure of the generated ID.
-// The sum of all bits must not exceed 63 bits.
+// The sum of all bits must not exceed 63.
 type MaskConfig struct {
 	TimeBits, WorkerBits, SequenceBits uint8
 }
@@ -40,16 +40,17 @@ type bitmask struct {
 
 // Node struct
 type Node struct {
-	mutex     *sync.Mutex
-	epoch     int64
-	tslast    int64 // most recent time when this snowflake was used
-	timeMask  uint64
-	machineID uint32
-	maxSeq    uint32
-	mask      MaskConfig
-	seq       uint16
-	shiftTime uint8
-	bmask     bitmask
+	mutex       *sync.Mutex
+	epoch       int64
+	tslast      int64 // most recent time when this snowflake was used
+	timeMask    uint64
+	machineID   uint32
+	maxSeq      uint32
+	mask        MaskConfig
+	seq         uint16
+	shiftTime   uint8
+	shiftWorker uint8
+	bmask       bitmask
 }
 
 // NewNode creates new SnowFlake worker
@@ -91,6 +92,7 @@ func NewNode(st Settings, mc ...MaskConfig) (*Node, error) {
 	sf.bmask.machine = uint32(1)<<mask.WorkerBits - 1
 	sf.bmask.seq = uint16(1)<<mask.SequenceBits - 1
 	sf.shiftTime = mask.WorkerBits + mask.SequenceBits
+	sf.shiftWorker = mask.SequenceBits
 	sf.seq = sf.bmask.seq // why is it set to max value ?
 
 	return sf, nil
@@ -207,7 +209,7 @@ func (sf *Node) toID() (uint64, error) {
 	}
 	// Time-MachineID-Sequence
 	return uint64(sf.tslast-sf.epoch)<<(sf.shiftTime) |
-		uint64(sf.machineID)<<sf.mask.SequenceBits |
+		uint64(sf.machineID)<<sf.shiftWorker |
 		uint64(sf.seq), nil
 }
 

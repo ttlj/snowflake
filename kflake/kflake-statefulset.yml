@@ -33,7 +33,7 @@ spec:
       terminationGracePeriodSeconds: 5
       containers:
       - name: kflake
-        image: digiverse/kflake:0.1.1
+        image: digiverse/kflake:0.2.1
         imagePullPolicy: Always
         env:
         - name: MY_POD_NAME
@@ -52,4 +52,4 @@ spec:
               path: /status
               port: kflake
             initialDelaySeconds: 5
-            periodSeconds: 60
+            periodSeconds: 10
