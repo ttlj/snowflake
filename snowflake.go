@@ -1,3 +1,4 @@
+// Package snowflake implements Twitter's SnowFlake algorithm.
 package snowflake
 
 import (
@@ -99,7 +100,8 @@ func NewNode(st Settings, mc ...MaskConfig) (*Node, error) {
 }
 
 // NextID generates a next unique ID.
-// After the Node time overflows, NextID returns an error.
+// Returns an error when Node's time overflows.
+// It terminates if it detects backwards moving time.
 func (sf *Node) NextID() (uint64, error) {
 	sf.mutex.Lock()
 	defer sf.mutex.Unlock()
@@ -152,7 +154,8 @@ func (sf *Node) intervals(size uint16) ([]interval, error) {
 	return lst, nil
 }
 
-// NextIDRange returns
+// NextIDRange returns lower and upper identifiers of a range.
+// The size is up to SequenceBits^2 - 1.
 func (sf *Node) NextIDRange() (uint64, uint64, error) {
 	sf.mutex.Lock()
 	defer sf.mutex.Unlock()

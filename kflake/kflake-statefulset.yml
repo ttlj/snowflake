@@ -8,7 +8,6 @@ spec:
   ports:
     - port: 3080
       name: kflake
-  clusterIP: None
   selector:
     app: kflake
 ---
