@@ -1,3 +1,12 @@
+/*
+Package restful provides RESTful API for the snowflake package.
+
+Endpoints:
+  /id      - returns an ID
+  /ids     - returns list of IDs
+  /range   - returns a pair of IDs defining a range
+  /status  - returns the service status
+*/
 package restful
 
 import (
@@ -8,12 +17,12 @@ import (
 	"github.com/ttlj/snowflake"
 )
 
-// Env contains snowflake instance
+// Env contains a snowflake node
 type Env struct {
 	Flake *snowflake.Node
 }
 
-// NewEngine creates GIN server
+// NewEngine creates a GIN server
 func NewEngine(e *Env) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()

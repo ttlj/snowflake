@@ -14,14 +14,14 @@ var epoch = time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC).UnixNano() / scaleFactor
 
 // Settings configures Node
 //
-// StartTime is the time since which the SnowFlake time is defined as the elapsed time.
-// If StartTime is 0, the start time of the SnowFlake is set to "2014-09-01 00:00:00 +0000 UTC".
+// StartTime is the time since when the SnowFlake time is defined as the elapsed time.
+// If StartTime is 0, the start time of the SnowFlake is set to "2018-01-01 00:00:00 +0000 UTC".
 // If StartTime is ahead of the now time, SnowFlake is not created.
 //
 // WorkerID returns the unique ID of the SnowFlake instance.
 // If WorkerID returns an error, SnowFlake is not created.
-// If WorkerID is nil, default WorkerID is used.
-// Default WorkerID returns the lower 16 bits of the private IP address.
+// If WorkerID is nil, default WorkerID is used, which
+// returns the lower 16 bits of the private IP address.
 type Settings struct {
 	StartTime time.Time
 	WorkerID  func() (uint16, error)
@@ -30,7 +30,9 @@ type Settings struct {
 // MaskConfig configures the structure of the generated ID.
 // The sum of all bits must not exceed 63.
 type MaskConfig struct {
-	TimeBits, WorkerBits, SequenceBits uint8
+	TimeBits, // time-stamp
+	WorkerBits, // worker id
+	SequenceBits uint8
 }
 
 type bitmask struct {
@@ -60,7 +62,7 @@ func NewNode(st Settings, mc ...MaskConfig) (*Node, error) {
 	if len(mc) > 0 {
 		mask = mc[0]
 		if !validMask(mask) {
-			return nil, fmt.Errorf("invalid mask-config")
+			return nil, fmt.Errorf("snowflake: invalid mask-config")
 		}
 	}
 
@@ -68,7 +70,7 @@ func NewNode(st Settings, mc ...MaskConfig) (*Node, error) {
 	sf.mutex = new(sync.Mutex)
 
 	if st.StartTime.After(time.Now()) {
-		return nil, fmt.Errorf("invalid start-time")
+		return nil, fmt.Errorf("snowflake: invalid start-time")
 	}
 	if st.StartTime.IsZero() {
 		sf.epoch = epoch
@@ -84,7 +86,7 @@ func NewNode(st Settings, mc ...MaskConfig) (*Node, error) {
 		val, err = st.WorkerID()
 	}
 	if err != nil {
-		return nil, fmt.Errorf("cannot generate worker ID")
+		return nil, fmt.Errorf("snowflake: cannot generate worker ID")
 	}
 
 	sf.machineID = uint32(val)
@@ -107,51 +109,6 @@ func (sf *Node) NextID() (uint64, error) {
 	defer sf.mutex.Unlock()
 	sf.validateTime()
 	return sf.toID()
-}
-
-type interval struct {
-	lower, upper uint64
-}
-
-func (sf *Node) intervals(size uint16) ([]interval, error) {
-	sf.mutex.Lock()
-	defer sf.mutex.Unlock()
-	top := sf.bmask.seq
-	bulk := size
-	if size == 0 {
-		bulk = top
-	}
-	var count uint16
-	lst := make([]interval, 0, 4)
-	for count < bulk {
-		var err error
-		var ii interval
-		sf.validateTime()
-
-		rest := bulk - count
-		ii.lower, err = sf.toID()
-		if err != nil {
-			return nil, err
-		}
-
-		avail := top - sf.seq
-		if avail >= rest {
-			sf.seq += rest - 1
-		} else {
-			sf.seq = top
-		}
-		ii.upper, err = sf.toID()
-		if err != nil {
-			return nil, err
-		}
-
-		count += uint16(ii.upper - ii.lower + 1)
-		lst = append(lst, ii)
-		if size == 0 {
-			break
-		}
-	}
-	return lst, nil
 }
 
 // NextIDRange returns lower and upper identifiers of a range.
@@ -200,7 +157,7 @@ func (sf *Node) NextIDBatch(size int) ([]uint64, error) {
 
 // ---- private -----
 
-const scaleFactor = 1e6
+const scaleFactor = int64(time.Millisecond)
 
 func milliseconds() int64 {
 	return time.Now().UnixNano() / scaleFactor
@@ -208,7 +165,7 @@ func milliseconds() int64 {
 
 func (sf *Node) toID() (uint64, error) {
 	if (sf.tslast - sf.epoch) >= 1<<sf.mask.TimeBits {
-		return 0, errors.New("over the time limit")
+		return 0, errors.New("snowflake: over the time limit")
 	}
 	// Time-MachineID-Sequence
 	return uint64(sf.tslast-sf.epoch)<<(sf.shiftTime) |

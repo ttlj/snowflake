@@ -13,6 +13,7 @@ import (
 
 // EnvVarIPWorkerID returns lower 16 bits of an IP address
 // passed over via environment variable MY_HOST_IP.
+//
 // Note: env var usage is meant for Kubernetes and its ilk
 func EnvVarIPWorkerID() (uint16, error) {
 	ipStr := os.Getenv("MY_HOST_IP")
@@ -26,8 +27,9 @@ func EnvVarIPWorkerID() (uint16, error) {
 	return uint16(ip[14])<<8 + uint16(ip[15]), nil
 }
 
-// K8sPodID returns lower 16 bits of an IP address
+// K8sPodID returns the pod number, extracted from the pod name
 // passed over via environment variable MY_POD_NAME.
+//
 // Note: It requires StatefulSet pod names (my-pod-<number>)
 func K8sPodID() (uint16, error) {
 	pod := os.Getenv("MY_POD_NAME")
